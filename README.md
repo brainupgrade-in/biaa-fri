@@ -40,8 +40,70 @@ than describing the intended architecture as if it shipped.
 `StateGraph` topology. **No `.py` file constructs one.** There is no `StateGraph`, `add_node`,
 or `add_conditional_edges` anywhere in `backend/`.
 
-What does exist: every node in `backend/agent.py` is written to the exact contract LangGraph
-expects — take state, return a **partial** state dict to be merged:
+#### The intended workflow
+
+This is the topology from design doc §3.2. Solid boxes are nodes that exist **and** run today;
+dashed boxes exist in the design but are not part of any executed pipeline.
+
+```mermaid
+flowchart TD
+    START([entry]) --> PRE[guardrail_pre_check]
+    PRE --> ING[document_ingest]
+    ING --> FIG[figure_extraction]
+    FIG --> CIT[citation_indexing]
+    CIT --> ANA[analyst_reasoning]
+    ANA --> CMP[computation]
+    CMP --> ANM[anomaly_detection]
+    ANM --> ASM[response_assembly]
+    ASM --> POST[guardrail_post_check]
+
+    POST -. should_offer_trade .-> ROUTE{user typed /trade?}
+    ROUTE -- offer_trade --> TT[trade_tool]
+    ROUTE -- end --> DONE([END])
+
+    TT -. handle_trade_confirmation .-> CONF{confirmed?}
+    CONF -- confirm --> TC[trade_confirmation]
+    CONF -- cancel --> DONE
+    TC --> DONE
+
+    classDef missing stroke-dasharray: 5 5,color:#888
+    class ING,ANA,TC missing
+```
+
+#### What is actually implemented
+
+| Design node | In `agent.py` | Runs today? |
+|---|---|---|
+| `guardrail_pre_check` | yes | yes |
+| `document_ingest` | **no node** | ingest runs in `POST /api/documents/upload`, outside any pipeline |
+| `figure_extraction` | yes | yes |
+| `citation_indexing` | yes | yes |
+| `analyst_reasoning` | yes | **no — dead code**, never imported or called |
+| `computation` | yes | yes |
+| `anomaly_detection` | yes | yes |
+| `response_assembly` | yes | yes |
+| `guardrail_post_check` | yes | yes |
+| `trade_tool` | yes | yes, but via `POST /api/trade/draft`, not a graph edge |
+| `trade_confirmation` | **no node** | `POST /api/trade/confirm/{id}` returns a canned response |
+
+Routers: `should_offer_trade` is called directly in `main.py`; `handle_trade_confirmation` is
+written but never referenced.
+
+So the pipeline that actually runs is seven of the nine nodes in the designed linear spine
+(`document_ingest` and `analyst_reasoning` are the two that don't):
+
+```
+guardrail_pre_check → figure_extraction → citation_indexing → computation
+  → anomaly_detection → response_assembly → guardrail_post_check
+```
+
+Note `analyst_reasoning` would be redundant even if wired: it writes `final_response`, which
+`response_assembly` overwrites two steps later.
+
+#### Why the nodes are graph-ready
+
+Every node already honours the contract LangGraph expects — take the state, return a **partial**
+dict to be merged in:
 
 ```python
 def guardrail_pre_check(state: FinancialAgentState) -> dict:
@@ -51,10 +113,23 @@ def guardrail_pre_check(state: FinancialAgentState) -> dict:
     return {}          # empty dict == no state change
 ```
 
-Both conditional-edge routers exist too (`should_offer_trade`, `handle_trade_confirmation`),
-each returning the string key an `add_conditional_edges` mapping would dispatch on.
+The routers likewise return the string keys an `add_conditional_edges` mapping dispatches on
+(`"offer_trade"` / `"end"`, `"confirm"` / `"end"`). The shared state is the Pydantic model
+`FinancialAgentState` in `shared/schemas.py`, and each node owns distinct keys — which is exactly
+why a merge-based graph fits:
 
-But `backend/main.py` runs the nodes by hand and merges state itself:
+| Node | Writes |
+|---|---|
+| `guardrail_pre_check` | `user_query` (only when advisory phrasing is detected) |
+| `figure_extraction` | `extracted_figures` |
+| `citation_indexing` | `citation_index` |
+| `computation` | `computations` |
+| `anomaly_detection` | `anomalies` |
+| `response_assembly` | `final_response` |
+| `guardrail_post_check` | `rewritten_response`, `guardrail_interceptions`, `final_response` |
+| `trade_tool` | `trade_draft` |
+
+What's missing is only the wiring. `main.py` currently replays the merge by hand:
 
 ```python
 updates = guardrail_pre_check(state)
@@ -64,21 +139,22 @@ state = FinancialAgentState(**state_dict)
 updates = figure_extraction(state)
 state_dict.update(updates)
 state = FinancialAgentState(**state_dict)
-# ...repeated for every node
+# ...repeated for every node, in both the REST and WebSocket paths
 ```
 
-That is a manual reimplementation of what `StateGraph` would do. The nodes are graph-ready; only
-the wiring is missing. The intended topology (design doc §3.2):
+That loop is a hand-rolled `StateGraph`. Replacing it means building the graph once (design doc
+§3.2 has the ~30 lines) and calling `graph.invoke(state)`.
 
-```
-guardrail_pre_check → document_ingest → figure_extraction → citation_indexing
-  → analyst_reasoning → computation → anomaly_detection → response_assembly
-  → guardrail_post_check ─┬─ (user typed /trade) → trade_tool ─┬─ (confirmed) → trade_confirmation → END
-                          └─ (otherwise) ────────────────────→ END
-```
+#### What the missing graph costs
 
-Because the graph is absent there is no checkpointing, no conditional routing (the `/trade`
-branch is handled by separate endpoints instead), and no resumable threads.
+- **No checkpointing / resumable threads.** `AnalysisRequest` accepts a `thread_id`, but with no
+  checkpointer there is nothing to resume; each request replays from scratch.
+- **No conditional routing.** The `/trade` branch is split across separate endpoints instead of
+  being edges, so the confirmation step is a canned response rather than a graph node.
+- **Duplicated orchestration, already drifting.** `POST /api/analysis/query` and
+  `WS /ws/analysis/stream` each hand-roll the same seven nodes, but only the REST path then
+  checks `should_offer_trade` and runs `trade_tool`. Typing `/trade` over the WebSocket produces
+  no draft; the identical query over REST does. One graph would give both paths one definition.
 
 ### LangChain — one lazy import, for optional LLM extraction
 
@@ -181,7 +257,11 @@ and document persistence on SQLite or Postgres.
 
 Known gaps:
 
-- **The LangGraph topology isn't wired** — see above; the pipeline is hand-rolled in `main.py`.
+- **The LangGraph topology isn't wired** — see above. The pipeline is hand-rolled in `main.py`,
+  `analyst_reasoning` and `handle_trade_confirmation` are dead code, and `document_ingest` and
+  `trade_confirmation` never became nodes at all.
+- **`/trade` works over REST but not WebSocket** — a direct consequence of the orchestration
+  being duplicated by hand rather than defined once as a graph.
 - **Part of the persistence layer is unused.** `backend/database.py` defines repository functions
   for figures, guardrail events and trade drafts that nothing calls yet. Only documents and
   chunks are actually persisted; guardrail logs (`main._audit_log`) and trade drafts still live
