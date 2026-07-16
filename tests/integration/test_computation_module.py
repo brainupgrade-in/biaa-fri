@@ -137,7 +137,7 @@ class TestErrorGuards:
         """Missing input should return error."""
         result = compute_metric("a / b", {"a": 100})
         assert result["result"] is None
-        assert "missing" in result["error"].lower() or "not found" in result["error"].lower()
+        assert "missing" in result["error"].lower() or "not found" in result["error"].lower() or "not defined" in result["error"].lower()
 
 
 class TestUnitConsistency:

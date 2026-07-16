@@ -1,0 +1,14 @@
+FROM python:3.12-slim
+
+WORKDIR /sandbox
+
+RUN pip install --no-cache-dir numpy==1.26.4
+
+RUN useradd -m -u 1000 sandbox && chmod 700 /sandbox
+
+COPY ./backend/computation.py ./computation.py
+COPY ./shared ./shared
+
+USER sandbox
+
+CMD ["python", "-c", "from computation import execute_computation, compute_z_score; print('Sandbox ready')"]
