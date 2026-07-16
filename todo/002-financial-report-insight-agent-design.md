@@ -896,8 +896,8 @@ export function useAnalysisStream() {
 - [x] Vector store setup for document chunks (ChromaDB embedded)
 - [x] Basic WebSocket streaming
 - [x] Dockerfiles for all services (backend, sandbox)
-- [ ] Kind cluster configuration
-- [ ] Basic Kubernetes manifests
+- [x] Kind cluster configuration
+- [x] Basic Kubernetes manifests
 
 ### Phase 2: Core Agent (Weeks 4-6)
 **Goal:** Figure extraction and citation system
@@ -907,8 +907,8 @@ export function useAnalysisStream() {
 - [x] Citation index building
 - [x] Basic analyst reasoning with prompt templates
 - [x] Inline citation rendering
-- [ ] Secrets management in Kubernetes
-- [ ] Persistent volume configuration
+- [x] Secrets management in Kubernetes
+- [x] Persistent volume configuration
 
 ### Phase 3: Computation & Anomalies (Weeks 7-9)
 **Goal:** Safe computation and anomaly detection
@@ -918,8 +918,8 @@ export function useAnalysisStream() {
 - [x] Unit validation logic
 - [x] Statistical outlier detection
 - [x] Materiality threshold checks
-- [ ] Network policies for sandbox isolation
-- [ ] Computation service deployment
+- [x] Network policies for sandbox isolation
+- [x] Computation service deployment
 
 ### Phase 4: Guardrails (Weeks 10-11)
 **Goal:** No-advice enforcement and audit logging
@@ -930,7 +930,7 @@ export function useAnalysisStream() {
 - [x] Sentence rewriting logic
 - [x] Append-only audit log store (PostgreSQL)
 - [x] Audit log persistence configuration
-- [ ] RBAC for audit access
+- [x] RBAC for audit access
 
 ### Phase 5: Trade Tool (Weeks 12-13)
 **Goal:** Assistive trade draft with confirmation
@@ -986,7 +986,7 @@ export function useAnalysisStream() {
 | F-GRD-04 | System prompt | `analyst_reasoning` | Add hard-constraint | [x] |
 | F-TRD-01 | Trade brief schema | `trade_tool_node` | Implement TradeDraft | [x] |
 | F-TRD-02 | Disabled by default | `langgraph_edges` | Conditional routing | [x] |
-| F-TRD-03 | Confirmation card | `TradeDraftCard.tsx` | UI implementation | [ ] |
+| F-TRD-03 | Confirmation card | `TradeDraftCard.tsx` | UI implementation | [x] |
 | F-TRD-04 | No execution | `trade_tool_node` | Log-only confirmation | [x] |
 | F-TRD-05 | Draft logging | `trade_tool_node` | Append to trade log | [x] |
 | F-TRD-06 | Assistive sizing | `trade_tool_node` | Position size suggestion | [x] |
@@ -1005,20 +1005,20 @@ export function useAnalysisStream() {
 | NFR-03 | FP rate ≤ 10% | Test suite | Anomaly FP metrics | [ ] |
 | NFR-04 | Guardrail recall ≥ 99% | Test suite | Advisory detection metrics | [ ] |
 | NFR-05 | Log retention 7yr | `audit_log_store` | Retention policy | [ ] |
-| NFR-06 | PDF/HTML/XBRL | `document_ingest` | Parser implementations | [~] |
+| NFR-06 | PDF/HTML/XBRL | `document_ingest` | Parser implementations | [x] |
 | NFR-07 | 100+ concurrent | Load test | Concurrent session test | [ ] |
-| DEP-01 | Kind cluster setup | Infrastructure | Create kind-config.yaml | [ ] |
+| DEP-01 | Kind cluster setup | Infrastructure | Create kind-config.yaml | [x] |
 | DEP-02 | Dockerfiles | Build | Backend, Frontend, Sandbox | [x] |
-| DEP-03 | Kubernetes manifests | Deployment | Deployments, Services, Ingress | [ ] |
-| DEP-04 | Secrets management | Security | Create secrets.yaml | [ ] |
-| DEP-05 | Network policies | Security | Isolate sandbox, restrict traffic | [ ] |
-| DEP-06 | Persistent volumes | Storage | PVCs for DB, vector store | [ ] |
-| DEP-07 | RBAC | Security | Service accounts, roles | [ ] |
+| DEP-03 | Kubernetes manifests | Deployment | Deployments, Services, Ingress | [x] |
+| DEP-04 | Secrets management | Security | Create secrets.yaml | [x] |
+| DEP-05 | Network policies | Security | Isolate sandbox, restrict traffic | [x] |
+| DEP-06 | Persistent volumes | Storage | PVCs for DB, vector store | [x] |
+| DEP-07 | RBAC | Security | Service accounts, roles | [x] |
 | DEP-08 | Health checks | Reliability | Liveness/readiness probes | [x] |
-| DEP-09 | Monitoring | Observability | Prometheus/Grafana setup | [ ] |
-| DEP-10 | CI/CD pipeline | Automation | GitHub Actions workflow | [ ] |
-| DEP-11 | Deployment scripts | Automation | Setup, deploy, teardown | [ ] |
-| DEP-12 | Docker Compose | Local Dev | docker-compose.dev.yaml | [ ] |
+| DEP-09 | Monitoring | Observability | Prometheus/Grafana setup | [x] |
+| DEP-10 | CI/CD pipeline | Automation | GitHub Actions workflow | [x] |
+| DEP-11 | Deployment scripts | Automation | Setup, deploy, teardown | [x] |
+| DEP-12 | Docker Compose | Local Dev | docker-compose.dev.yaml | [x] |
 
 ---
 

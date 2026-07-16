@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chroma
+  namespace: financial-agent
+  labels:
+    app: chroma
+    component: vector-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chroma
+  template:
+    metadata:
+      labels:
+        app: chroma
+        component: vector-store
+    spec:
+      containers:
+        - name: chroma
+          image: chromadb/chroma:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: ANONYMIZED_TELEMETRY
+              value: "False"
+            - name: CHROMA_SERVER_HOST
+              value: "0.0.0.0"
+            - name: CHROMA_SERVER_HTTP_PORT
+              value: "8000"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: chroma-pv
+              mountPath: /chroma/chroma
+      volumes:
+        - name: chroma-pv
+          persistentVolumeClaim:
+            claimName: chroma-pvc

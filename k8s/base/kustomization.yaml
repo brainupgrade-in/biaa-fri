@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: financial-agent
+
+resources:
+  - 10-namespace.yaml
+  - 20-rbac.yaml
+  - 30-secrets.yaml
+  - 40-pvc.yaml
+  - 50-chroma.yaml
+  - 55-network-policies.yaml
+  - 60-backend.yaml
+  - 70-sandbox.yaml
+  - 80-frontend.yaml
+  - 90-services.yaml
+  - 95-ingress.yaml
+
+images:
+  - name: financial-agent/backend
+    newTag: latest
+  - name: financial-agent/frontend
+    newTag: latest
+  - name: financial-agent/sandbox
+    newTag: latest
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: financial-agent

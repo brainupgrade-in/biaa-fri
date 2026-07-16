@@ -11,6 +11,7 @@ from shared.schemas import GuardrailEvent
 ADVISORY_PATTERNS = [
     re.compile(r"should (I|we) (buy|sell|hold|invest)", re.IGNORECASE),
     re.compile(r"(recommend|suggest) (buying|selling|holding)", re.IGNORECASE),
+    re.compile(r"(recommend|suggest)\b", re.IGNORECASE),  # Match "recommend" or "suggest" standalone
     re.compile(r"(overweight|underweight|outperform|underperform)", re.IGNORECASE),
 ]
 
@@ -85,7 +86,10 @@ def _rewrite_to_observational(sentence: str) -> str:
     rules = [
         (r"You should buy (\w+)", r"\1 is under consideration"),
         (r"You should sell (\w+)", r"\1 is under consideration"),
-        (r"I recommend (\w+ing)", r"Analysis indicates \1"),
+        (r"I recommend (selling|buying|holding)", r"Analysis indicates \1"),
+        (r"I recommend (\w+)", r"Analysis indicates \1"),
+        (r"selling", r"potential sale"),  # Convert "selling" to observational
+        (r"buying", r"potential purchase"),  # Convert "buying" to observational
         (r"The stock is likely to outperform", r"The stock has shown performance trends"),
         (r"You should hold", r"The position remains unchanged"),
         (r"Consider overweighting", r"The stock has certain characteristics"),

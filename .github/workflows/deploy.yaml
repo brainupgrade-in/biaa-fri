@@ -1,0 +1,70 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest tests/ -v --cov=backend --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker build -t financial-agent/backend:latest -f Dockerfile.backend .
+
+      - name: Build frontend
+        run: docker build -t financial-agent/frontend:latest -f Dockerfile.frontend .
+
+      - name: Build sandbox
+        run: docker build -t financial-agent/sandbox:latest -f Dockerfile.sandbox .
+
+      - name: Load into Kind
+        run: |
+          kind create cluster --config kind-config.yaml --name financial-agent || true
+          kind load docker-image financial-agent/backend:latest --name financial-agent
+          kind load docker-image financial-agent/frontend:latest --name financial-agent
+          kind load docker-image financial-agent/sandbox:latest --name financial-agent
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Kind
+        run: |
+          kubectl apply -k k8s/
+          kubectl rollout restart deployment/backend -n financial-agent
+          kubectl rollout restart deployment/frontend -n financial-agent
+          kubectl rollout restart deployment/sandbox -n financial-agent
+
+      - name: Run smoke tests
+        run: |
+          kubectl wait --for=condition=ready pod -l app=backend -n financial-agent --timeout=120s
+          curl -f http://localhost/api/health

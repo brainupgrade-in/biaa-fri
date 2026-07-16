@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  financial-agent.json: |
+    {
+      "dashboard": {
+        "title": "Financial Agent Dashboard",
+        "panels": [
+          {
+            "title": "Request Latency (p95)",
+            "type": "graph",
+            "targets": [{"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))"}]
+          },
+          {
+            "title": "Guardrail Interceptions",
+            "type": "stat",
+            "targets": [{"expr": "increase(guardrail_interceptions_total[1h])"}]
+          },
+          {
+            "title": "Active Sessions",
+            "type": "gauge",
+            "targets": [{"expr": "active_sessions"}]
+          },
+          {
+            "title": "Anomaly Flags",
+            "type": "table",
+            "targets": [{"expr": "increase(anomaly_flags_total[1h])"}]
+          },
+          {
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [{"expr": "rate(http_requests_total[5m])"}]
+          },
+          {
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [{"expr": "rate(http_requests_total{status=~\"5..\"}[5m])"}]
+          },
+          {
+            "title": "Computation Duration",
+            "type": "graph",
+            "targets": [{"expr": "histogram_quantile(0.95, rate(computation_duration_seconds_bucket[5m]))"}]
+          },
+          {
+            "title": "Vector Store Query Latency",
+            "type": "graph",
+            "targets": [{"expr": "histogram_quantile(0.95, rate(vector_store_query_duration_seconds_bucket[5m]))"}]
+          }
+        ]
+      }
+    }

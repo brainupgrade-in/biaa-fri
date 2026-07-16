@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Optional
 
 import PyPDF2
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
+
+try:
+    from lxml import etree
+    LXML_AVAILABLE = True
+except ImportError:
+    LXML_AVAILABLE = False
 
 from backend.vector_store import vector_store
 
@@ -147,23 +160,47 @@ def _parse_pdf(content: bytes, doc_id: str) -> list[DocumentChunk]:
 
 
 def _parse_html(content: bytes, doc_id: str) -> list[DocumentChunk]:
-    """Parse HTML content (basic implementation)."""
+    """Parse HTML content using BeautifulSoup if available, otherwise regex."""
     text = content.decode("utf-8", errors="ignore")
-    # Simple HTML tag stripping
-    import re
-    clean_text = re.sub(r"<[^>]+>", "\n", text)
-    clean_text = re.sub(r"\s+", " ", clean_text)
+    
+    if BS4_AVAILABLE:
+        soup = BeautifulSoup(text, "html.parser")
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+        # Get text with structure preserved
+        clean_text = soup.get_text(separator="\n", strip=True)
+    else:
+        # Fallback to regex-based cleaning
+        clean_text = re.sub(r"<[^>]+>", "\n", text)
+        clean_text = re.sub(r"\s+", " ", clean_text)
+    
     return _parse_text_to_chunks(clean_text, doc_id)
 
 
 def _parse_xbrl(content: bytes, doc_id: str) -> list[DocumentChunk]:
-    """Parse XBRL content (basic implementation)."""
+    """Parse XBRL content using lxml if available, otherwise regex."""
     text = content.decode("utf-8", errors="ignore")
-    # XBRL is XML-based; extract text content
-    import re
-    # Simple extraction of text between tags
-    clean_text = re.sub(r"<[^>]+>", " ", text)
-    clean_text = re.sub(r"\s+", " ", clean_text)
+    
+    if LXML_AVAILABLE:
+        try:
+            # Parse XBRL as XML
+            parser = etree.XMLParser(recover=True, huge_tree=True)
+            root = etree.fromstring(text.encode("utf-8"), parser=parser)
+            
+            # Extract all text content from XBRL elements
+            # XBRL uses namespaces, so we extract all text nodes
+            texts = root.xpath("//text()")
+            clean_text = "\n".join(t.strip() for t in texts if t.strip())
+        except etree.XMLSyntaxError:
+            # Fallback if XML parsing fails
+            clean_text = re.sub(r"<[^>]+>", " ", text)
+            clean_text = re.sub(r"\s+", " ", clean_text)
+    else:
+        # Regex-based extraction for XBRL/XML
+        clean_text = re.sub(r"<[^>]+>", " ", text)
+        clean_text = re.sub(r"\s+", " ", clean_text)
+    
     return _parse_text_to_chunks(clean_text, doc_id)
 
 

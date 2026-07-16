@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: financial-agent
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  Z_SCORE_THRESHOLD: "2.0"
+  MATERIALITY_THRESHOLD: "0.10"
+  PRECISION_DECIMALS: "2"
+  COMPUTATION_TIMEOUT: "5"
+  MAX_CONCURRENT_SESSIONS: "100"
+  AUDIT_LOG_RETENTION_YEARS: "7"
+  ADVISORY_KEYWORDS: "you should,recommend,buy,sell,hold,overweight,underweight,outperform,underperform"
+  CHROMA_EMBEDDED: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: financial-agent
+data:
+  default.conf: |
+    server {
+        listen 3000;
+        server_name localhost;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /api {
+            proxy_pass http://backend:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /ws {
+            proxy_pass http://backend:8000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+    }

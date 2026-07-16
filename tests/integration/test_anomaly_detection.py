@@ -41,13 +41,15 @@ class TestOutlierDetection:
     def test_custom_threshold(self):
         """F-ANM-01: Custom z-score threshold should be respected."""
         historical = [10, 12, 11, 13, 12, 11, 10, 12, 11, 13]
-        current = 18  # Moderate outlier
+        # Mean ≈ 11.5, Std ≈ 1.02
+        # Value 14 gives z-score ≈ 2.45 (between 2 and 3)
+        current = 14  # Moderate outlier
 
-        # With threshold=3.0, should not be flagged
+        # With threshold=3.0, should NOT be flagged (z ≈ 2.45 < 3.0)
         result_strict = detect_outlier(historical, current, threshold=3.0)
         assert result_strict["is_outlier"] is False
 
-        # With threshold=1.5, should be flagged
+        # With threshold=1.5, should be flagged (z ≈ 2.45 > 1.5)
         result_loose = detect_outlier(historical, current, threshold=1.5)
         assert result_loose["is_outlier"] is True
 
