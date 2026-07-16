@@ -26,6 +26,13 @@ export interface AnalysisStreamRequest {
   thread_id: string;
 }
 
+// The API is served from the same origin as this bundle, so derive the
+// WebSocket URL from the page location rather than hardcoding a host.
+function defaultStreamUrl(): string {
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${scheme}//${window.location.host}/ws/analysis/stream`;
+}
+
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -36,7 +43,7 @@ class WebSocketService {
   private onCloseCallback?: () => void;
   private onErrorCallback?: (error: Event) => void;
 
-  connect(url: string = 'ws://localhost/ws/analysis/stream'): Promise<void> {
+  connect(url: string = defaultStreamUrl()): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.ws = new WebSocket(url);

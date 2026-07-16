@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
-import { useDocuments, useAnalysis, useTradeTool } from '../../hooks/useFinancialAgent';
-import { AnalysisChat } from '../Analysis/AnalysisChat';
-import { TradeDraftCard } from '../TradeTool/TradeDraftCard';
+import { useDocuments, useAnalysis, useTradeTool } from '../hooks/useFinancialAgent';
+import { AnalysisChat } from './Analysis/AnalysisChat';
+import { TradeDraftCard } from './TradeTool/TradeDraftCard';
 import { DocumentUploader } from './DocumentUploader';
 
 export function Dashboard() {
   const { documents, loading: docsLoading, uploadDocument, refreshDocuments } = useDocuments();
-  const { 
-    response, 
-    loading: analysisLoading, 
-    streaming, 
+  const {
+    response,
+    loading: analysisLoading,
+    streaming,
     error: analysisError,
-    queryAnalysis, 
-    streamResponse 
+    queryAnalysis,
   } = useAnalysis();
-  const { tradeDraft, loading: tradeLoading, createDraft, confirmDraft, setTradeDraft } = useTradeTool();
+  const { tradeDraft, loading: tradeLoading, createDraft, confirmDraft } = useTradeTool();
   
   const [showTradeDraft, setShowTradeDraft] = useState(false);
 
@@ -26,11 +25,11 @@ export function Dashboard() {
         const ticker = parts[1];
         const direction = parts[2] as 'long' | 'short' | 'neutral';
         // First analyze, then create trade draft
-        queryAnalysis(query.replace('/trade ', ''));
+        queryAnalysis(query.replace('/trade ', ''), docIds);
         setTimeout(() => createDraft(ticker, direction), 1000);
       }
     } else {
-      queryAnalysis(query);
+      queryAnalysis(query, docIds);
     }
   };
 

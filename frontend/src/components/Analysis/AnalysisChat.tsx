@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AnalysisChatProps } from '../types/financial-agent';
 
 interface AnalysisChatProps {
   documents: any[];
@@ -56,21 +55,25 @@ export function AnalysisChat({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !selectedDocIds.length) return;
+  const submitQuery = (query: string) => {
+    if (!query.trim() || !selectedDocIds.length) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       type: 'user',
-      content: input,
+      content: query,
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
-    onAnalyze(input);
+    onAnalyze(query);
     setInput('');
     setShowSuggestions(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitQuery(input);
   };
 
   const handleTradeDraft = (ticker: string, direction: 'long' | 'short' | 'neutral') => {
@@ -138,7 +141,7 @@ export function AnalysisChat({
                 <button
                   key={i}
                   className="suggestion-chip"
-                  onClick={() => { setInput(suggestion); handleSubmit(new Event('submit')); }}
+                  onClick={() => submitQuery(suggestion)}
                 >
                   {suggestion}
                 </button>
