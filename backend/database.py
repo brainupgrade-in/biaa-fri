@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    CHAR,
     JSON,
     Boolean,
     Column,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
     create_engine,
     event,
@@ -26,6 +28,32 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.config import settings
+
+
+class GUID(TypeDecorator):
+    """UUID column that uses native UUID on PostgreSQL and CHAR(36) elsewhere."""
+
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if not isinstance(value, uuid.UUID):
+            # Callers pass ids as strings; normalise so stored values and query
+            # params share one canonical form.
+            value = uuid.UUID(str(value))
+        return value if dialect.name == "postgresql" else str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None or isinstance(value, uuid.UUID):
+            return value
+        return uuid.UUID(value)
 
 
 class Base(DeclarativeBase):
@@ -37,7 +65,7 @@ class Document(Base):
 
     __tablename__ = "documents"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     filename = Column(String(255), nullable=False)
     doc_type = Column(String(50), nullable=False)
     company = Column(String(255))
@@ -59,8 +87,8 @@ class DocumentChunk(Base):
 
     __tablename__ = "document_chunks"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    doc_id = Column(PG_UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    doc_id = Column(GUID(), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     page = Column(Integer)
     section = Column(String(255))
     content = Column(Text)
@@ -77,8 +105,8 @@ class ExtractedFigure(Base):
 
     __tablename__ = "extracted_figures"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    doc_id = Column(PG_UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    doc_id = Column(GUID(), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     value = Column(Float)
     unit = Column(String(50), default="USD")
@@ -99,8 +127,8 @@ class Citation(Base):
 
     __tablename__ = "citations"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    doc_id = Column(PG_UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    doc_id = Column(GUID(), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     section = Column(String(255), nullable=False)
     page = Column(Integer, nullable=False)
     figure_refs = Column(JSON, default=list)
@@ -112,7 +140,7 @@ class ComputationResult(Base):
 
     __tablename__ = "computations"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     metric = Column(String(100), nullable=False)
     formula = Column(String(500))
     result = Column(Float)
@@ -127,8 +155,8 @@ class Anomaly(Base):
 
     __tablename__ = "anomalies"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    doc_id = Column(PG_UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    doc_id = Column(GUID(), ForeignKey("documents.id", ondelete="CASCADE"), index=True)
     description = Column(Text, nullable=False)
     severity = Column(String(20), nullable=False)  # info, warning, critical
     metric = Column(String(100))
@@ -148,7 +176,7 @@ class GuardrailEvent(Base):
 
     __tablename__ = "guardrail_audit_log"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     original_text = Column(Text, nullable=False)
     rewritten_text = Column(Text, nullable=False)
@@ -173,7 +201,7 @@ class TradeDraft(Base):
 
     __tablename__ = "trade_drafts"
 
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     ticker = Column(String(20), nullable=False, index=True)
     direction = Column(String(10), nullable=False)  # long, short, neutral
     thesis = Column(Text)
@@ -198,12 +226,22 @@ def get_engine():
     """Get or create database engine."""
     global _engine
     if _engine is None:
-        _engine = create_engine(
-            settings.database_url,
-            pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=20,
-        )
+        url = settings.database_url
+        if url.startswith("sqlite"):
+            # SQLite is accessed from FastAPI's sync threadpool, so same-thread
+            # checking must be off; pool sizing options don't apply.
+            _engine = create_engine(
+                url,
+                pool_pre_ping=True,
+                connect_args={"check_same_thread": False},
+            )
+        else:
+            _engine = create_engine(
+                url,
+                pool_pre_ping=True,
+                pool_size=10,
+                max_overflow=20,
+            )
     return _engine
 
 
@@ -312,6 +350,29 @@ def save_figures(doc_id: str, figures: list[dict]) -> list[ExtractedFigure]:
         for f in db_figures:
             session.refresh(f)
         return db_figures
+    finally:
+        session.close()
+
+
+def get_document_by_hash(content_hash: str) -> Optional[Document]:
+    """Retrieve a document by its content hash."""
+    session = get_db_session()
+    try:
+        return session.query(Document).filter(Document.content_hash == content_hash).first()
+    finally:
+        session.close()
+
+
+def get_chunks_by_doc(doc_id: str) -> list[DocumentChunk]:
+    """Get all chunks for a document, in ingest order."""
+    session = get_db_session()
+    try:
+        return (
+            session.query(DocumentChunk)
+            .filter(DocumentChunk.doc_id == doc_id)
+            .order_by(DocumentChunk.chunk_index)
+            .all()
+        )
     finally:
         session.close()
 

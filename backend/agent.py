@@ -124,7 +124,7 @@ def extract_figures_from_text(text: str, doc_id: str) -> list[ExtractedFigure]:
     # Matches: "Revenue: $5,200,000,000" or "Current Assets: 3,500,000,000"
     # Avoids matching section headers like "INCOME STATEMENT"
     pattern = re.compile(
-        r'(?:^|\n)\s*([A-Za-z][A-Za-z\s]{2,50}?):\s*\$?([\d,]+(?:\.\d+)?)\s*(million|billion|M|B|%|USD)?',
+        r'(?:^|\n)[ \t]*([A-Za-z][A-Za-z ]{2,50}?):[ \t]*\$?([\d,]+(?:\.\d+)?)[ \t]*(million|billion|M|B|%|USD)?',
         re.IGNORECASE | re.MULTILINE,
     )
 

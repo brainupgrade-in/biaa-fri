@@ -23,6 +23,7 @@ try:
 except ImportError:
     LXML_AVAILABLE = False
 
+from backend import database as db
 from backend.vector_store import vector_store
 
 
@@ -47,14 +48,34 @@ class IngestedDocument:
     content_hash: str = ""
 
 
-# In-memory store (replaced by DB in production)
-_document_store: dict[str, IngestedDocument] = {}
+def _to_ingested(row, chunk_rows) -> IngestedDocument:
+    """Rebuild an IngestedDocument from its database rows."""
+    return IngestedDocument(
+        doc_id=str(row.id),
+        filename=row.filename,
+        doc_type=row.doc_type,
+        company=row.company or "",
+        ticker=row.ticker or "",
+        period=row.period or "",
+        currency=row.currency or "USD",
+        chunks=[
+            DocumentChunk(page=c.page, section=c.section, content=c.content)
+            for c in chunk_rows
+        ],
+        content_hash=row.content_hash or "",
+    )
 
 
 def ingest_document(filename: str, content: bytes) -> IngestedDocument:
     """Ingest a document and store it."""
     doc_id = str(uuid.uuid4())
     content_hash = hashlib.sha256(content).hexdigest()
+
+    # content_hash is unique in the DB, so re-uploading identical content
+    # returns the existing document rather than failing on the constraint.
+    existing = db.get_document_by_hash(content_hash)
+    if existing is not None:
+        return _to_ingested(existing, db.get_chunks_by_doc(str(existing.id)))
 
     doc = IngestedDocument(
         doc_id=doc_id,
@@ -86,18 +107,40 @@ def ingest_document(filename: str, content: bytes) -> IngestedDocument:
     ]
     vector_store.add_chunks(doc_id, chunk_dicts)
 
-    _document_store[doc_id] = doc
+    db.save_document({
+        "doc_id": doc_id,
+        "filename": doc.filename,
+        "doc_type": doc.doc_type,
+        "company": doc.company,
+        "ticker": doc.ticker,
+        "period": doc.period,
+        "currency": doc.currency,
+        "content_hash": content_hash,
+    })
+    db.save_chunks(doc_id, chunk_dicts)
+
     return doc
 
 
 def get_document(doc_id: str) -> IngestedDocument | None:
     """Retrieve a document by ID."""
-    return _document_store.get(doc_id)
+    try:
+        uuid.UUID(doc_id)
+    except ValueError:
+        # doc_id comes straight from the URL and may not be a UUID at all.
+        return None
+    row = db.get_document(doc_id)
+    if row is None:
+        return None
+    return _to_ingested(row, db.get_chunks_by_doc(doc_id))
 
 
 def list_documents() -> list[IngestedDocument]:
     """List all documents."""
-    return list(_document_store.values())
+    return [
+        _to_ingested(row, db.get_chunks_by_doc(str(row.id)))
+        for row in db.list_documents()
+    ]
 
 
 def _detect_doc_type(filename: str) -> str:
