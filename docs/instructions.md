@@ -1,0 +1,1 @@
+build a financial-report insight agent — ground every figure to its source, cite each claim, compute safely, flag anomalies, a no-advice guardrail, and a withheld trade tool (assistive, not autonomous)
