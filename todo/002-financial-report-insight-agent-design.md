@@ -891,9 +891,9 @@ export function useAnalysisStream() {
 **Goal:** Core infrastructure and document ingestion
 
 - [x] Project setup (FastAPI, React, PostgreSQL)
-- [~] Document upload and parsing (PDF, HTML, XBRL) - basic text parsing implemented, PDF/HTML/XBRL parsers pending
+- [x] Document upload and parsing (PDF, HTML, XBRL) - PyPDF2, basic HTML/XBRL parsers implemented
 - [x] Basic LangGraph graph with placeholder nodes (implemented as function-based pipeline)
-- [ ] Vector store setup for document chunks
+- [x] Vector store setup for document chunks (ChromaDB embedded)
 - [x] Basic WebSocket streaming
 - [x] Dockerfiles for all services (backend, sandbox)
 - [ ] Kind cluster configuration
@@ -902,7 +902,7 @@ export function useAnalysisStream() {
 ### Phase 2: Core Agent (Weeks 4-6)
 **Goal:** Figure extraction and citation system
 
-- [~] Figure extraction node with LangChain tools (regex-based implemented, LLM-based pending)
+- [x] Figure extraction node with LLM tools (Groq llama-3.1-8b-instant)
 - [x] Source location tracking
 - [x] Citation index building
 - [x] Basic analyst reasoning with prompt templates
@@ -913,7 +913,7 @@ export function useAnalysisStream() {
 ### Phase 3: Computation & Anomalies (Weeks 7-9)
 **Goal:** Safe computation and anomaly detection
 
-- [~] Python sandbox implementation (eval-based implemented, sandboxed execution pending)
+- [x] Python sandbox implementation (RestrictedPython)
 - [x] Computation node integration
 - [x] Unit validation logic
 - [x] Statistical outlier detection
@@ -928,8 +928,8 @@ export function useAnalysisStream() {
 - [x] Post-check guardrail node
 - [x] Advisory language detection
 - [x] Sentence rewriting logic
-- [x] Append-only audit log store
-- [ ] Audit log persistence configuration
+- [x] Append-only audit log store (PostgreSQL)
+- [x] Audit log persistence configuration
 - [ ] RBAC for audit access
 
 ### Phase 5: Trade Tool (Weeks 12-13)
@@ -940,8 +940,8 @@ export function useAnalysisStream() {
 - [ ] Confirmation card UI
 - [x] Trade draft logging
 - [x] Position sizing logic
-- [ ] Trade draft persistence
-- [ ] Compliance logging to persistent storage
+- [x] Trade draft persistence (PostgreSQL)
+- [x] Compliance logging to persistent storage
 
 ### Phase 6: Admin & Polish (Weeks 14-15)
 **Goal:** Admin interface and production readiness
@@ -969,7 +969,7 @@ export function useAnalysisStream() {
 | F-CIT-02 | Sources block | `response_assembly` | Append sources section | [x] |
 | F-CIT-03 | Multi-source synthesis | `citation_indexing` | Track source lineage | [x] |
 | F-CIT-04 | Hallucination check | `response_assembly` | Self-check against index | [x] |
-| F-CMP-01 | Sandbox delegation | `computation_node` | Implement RestrictedPython | [~] |
+| F-CMP-01 | Sandbox delegation | `computation_node` | Implement RestrictedPython | [x] |
 | F-CMP-02 | Result traceability | `computation_node` | Return formula + inputs | [x] |
 | F-CMP-03 | Precision policy | `computation_module` | Format output precision | [x] |
 | F-CMP-04 | Div-by-zero guard | `computation_module` | Add symbolic error handling | [x] |
@@ -981,7 +981,7 @@ export function useAnalysisStream() {
 | F-ANM-04 | Severity levels | `anomaly_detection_node` | Map z-score to severity | [x] |
 | F-ANM-05 | No conclusions | `analyst_reasoning` | Prompt constraint | [x] |
 | F-GRD-01 | Advisory classifier | `guardrail_post_check` | Keyword + LLM check | [x] |
-| F-GRD-02 | Sentence rewrite | `guardrail_post_check` | LLM rewrite to observational | [~] |
+| F-GRD-02 | Sentence rewrite | `guardrail_post_check` | LLM rewrite to observational | [x] |
 | F-GRD-03 | Interception logging | `guardrail_post_check` | Append to audit log | [x] |
 | F-GRD-04 | System prompt | `analyst_reasoning` | Add hard-constraint | [x] |
 | F-TRD-01 | Trade brief schema | `trade_tool_node` | Implement TradeDraft | [x] |
