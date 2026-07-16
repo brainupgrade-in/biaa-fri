@@ -15,12 +15,14 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     ollama_api_key: str = ""
 
-    # Database
-    database_url: str = "postgresql://agent_user:changeme@localhost:5432/financial_agent"
+    # Database. Defaults to embedded SQLite so the app runs as a single
+    # container; point at Postgres by setting DATABASE_URL.
+    database_url: str = "sqlite:///./data/app.db"
 
     # Vector store
     chroma_host: str = "localhost"
     chroma_port: int = 8000
+    chroma_persist_dir: str = "./data/chroma_db"
 
     # Computation sandbox
     sandbox_host: str = "localhost"

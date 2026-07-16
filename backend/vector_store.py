@@ -8,6 +8,8 @@ from typing import Optional
 import chromadb
 from chromadb.config import Settings
 
+from backend.config import settings as app_settings
+
 
 class VectorStore:
     """ChromaDB vector store for document chunks."""
@@ -24,7 +26,7 @@ class VectorStore:
             if self._use_embedded:
                 # Use embedded client for development
                 self._client = chromadb.PersistentClient(
-                    path="./chroma_db",
+                    path=app_settings.chroma_persist_dir,
                     settings=Settings(anonymized_telemetry=False),
                 )
             else:

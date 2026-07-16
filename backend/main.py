@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.agent import (
     citation_indexing,
@@ -21,7 +23,7 @@ from backend.agent import (
     trade_tool,
 )
 from backend.config import settings
-from backend.database import Base, _engine as engine, init_db
+from backend.database import init_db
 from backend.document_ingest import get_document, ingest_document, list_documents
 from shared.schemas import (
     AnalysisRequest,
@@ -257,3 +259,13 @@ async def get_trade_drafts(user_id: str = ""):
 @app.get("/api/admin/system-health")
 async def system_health():
     return {"status": "healthy", "components": {"backend": "ok", "database": "ok"}}
+
+
+# Serve the built React app. Mounted last so it only catches paths the API
+# routes above didn't claim; html=True falls back to index.html for client
+# -side routes. Absent in local dev when the frontend hasn't been built.
+_static_dir = os.getenv("STATIC_DIR", "frontend/build")
+if os.path.isdir(_static_dir):
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="frontend")
+else:
+    logger.warning("Static dir %s not found; serving API only", _static_dir)
