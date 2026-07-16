@@ -1,0 +1,205 @@
+# =============================================================================
+# Python
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.env.*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# =============================================================================
+# Node.js / React
+# =============================================================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+
+# Build
+build/
+dist/
+out/
+
+# Testing
+coverage/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+docker-compose.override.yml
+
+# =============================================================================
+# Kubernetes
+# =============================================================================
+
+# Helm
+*.tgz
+charts/
+
+# Kustomize
+kustomize_output/
+
+# =============================================================================
+# IDEs and Editors
+# =============================================================================
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# OS Files
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# =============================================================================
+# Logs
+# =============================================================================
+
+logs/
+*.log
+
+# =============================================================================
+# Runtime Data
+# =============================================================================
+
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+
+# Session files
+session-*.md
+
+# Local development
+.docker/
+docker-compose.dev.yml
+
+# Documentation build
+docs/_build/
+
+# Secrets (never commit)
+*.pem
+*.key
+*.cert
+secrets/
