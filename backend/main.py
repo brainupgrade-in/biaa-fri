@@ -21,7 +21,7 @@ from backend.agent import (
     trade_tool,
 )
 from backend.config import settings
-from backend.database import Base, engine, init_db
+from backend.database import Base, _engine as engine, init_db
 from backend.document_ingest import get_document, ingest_document, list_documents
 from shared.schemas import (
     AnalysisRequest,
