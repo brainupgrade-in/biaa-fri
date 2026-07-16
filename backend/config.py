@@ -8,8 +8,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # LLM
     llm_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "llama-3.1-8b-instant"  # Groq model
     llm_temperature: float = 0.0
+
+    # Groq API key (loaded from .env)
+    groq_api_key: str = ""
+    ollama_api_key: str = ""
 
     # Database
     database_url: str = "postgresql://agent_user:changeme@localhost:5432/financial_agent"
@@ -52,7 +56,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "allow"}
 
 
 settings = Settings()

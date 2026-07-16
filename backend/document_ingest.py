@@ -10,6 +10,8 @@ from typing import Optional
 
 import PyPDF2
 
+from backend.vector_store import vector_store
+
 
 @dataclass
 class DocumentChunk:
@@ -52,7 +54,7 @@ def ingest_document(filename: str, content: bytes) -> IngestedDocument:
         content_hash=content_hash,
     )
 
-    # Parse based on document type
+    # Parse content based on document type
     if doc.doc_type == "PDF":
         doc.chunks = _parse_pdf(content, doc_id)
     elif doc.doc_type == "HTML":
@@ -63,6 +65,13 @@ def ingest_document(filename: str, content: bytes) -> IngestedDocument:
         # Fallback to text parsing
         text = content.decode("utf-8", errors="ignore")
         doc.chunks = _parse_text_to_chunks(text, doc_id)
+
+    # Add chunks to vector store
+    chunk_dicts = [
+        {"page": c.page, "section": c.section, "content": c.content}
+        for c in doc.chunks
+    ]
+    vector_store.add_chunks(doc_id, chunk_dicts)
 
     _document_store[doc_id] = doc
     return doc

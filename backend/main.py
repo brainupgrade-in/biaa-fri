@@ -21,6 +21,7 @@ from backend.agent import (
     trade_tool,
 )
 from backend.config import settings
+from backend.database import Base, engine, init_db
 from backend.document_ingest import get_document, ingest_document, list_documents
 from shared.schemas import (
     AnalysisRequest,
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=settings.log_level)
     logger.info("Financial Insight Agent starting...")
+    # Initialize database tables
+    init_db()
     yield
     logger.info("Financial Insight Agent shutting down...")
 

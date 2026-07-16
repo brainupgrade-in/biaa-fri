@@ -42,8 +42,80 @@ def guardrail_pre_check(state: FinancialAgentState) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Node: Figure Extraction (rule-based + LLM placeholder)
+# Node: Figure Extraction (rule-based + LLM)
 # ---------------------------------------------------------------------------
+
+FIGURE_EXTRACTION_PROMPT = """Extract ALL numerical figures from the following financial document text.
+
+For each figure, provide:
+- name: the exact label/name of the figure (e.g., "Revenue", "Current Assets", "Net Income")
+- value: the numerical value
+- unit: the unit (USD, %, shares, ratio, etc.)
+- confidence: high (primary table), medium (footnote), low (narrative), unverified
+
+Return as JSON array. Only extract actual financial figures, not section headers or dates.
+
+Text:
+{text}"""
+
+
+def extract_figures_with_llm(text: str, doc_id: str, page: int, section: str) -> list[ExtractedFigure]:
+    """Extract figures using LLM for better accuracy."""
+    if not settings.llm_api_key:
+        return []
+
+    try:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model=settings.llm_model,
+            temperature=settings.llm_temperature,
+            api_key=settings.groq_api_key,
+            base_url="https://api.groq.com/openai/v1",
+        )
+
+        # Split text into chunks if too long
+        max_chars = 8000
+        if len(text) > max_chars:
+            text = text[:max_chars]
+
+        prompt = FIGURE_EXTRACTION_PROMPT.format(text=text)
+        response = llm.invoke(prompt)
+        content = response.content
+
+        # Parse JSON response
+        import json
+        # Extract JSON from markdown code block if present
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        figures_data = json.loads(content)
+
+        figures = []
+        for fd in figures_data:
+            try:
+                value = float(fd.get("value", 0)) if fd.get("value") is not None else None
+                figures.append(ExtractedFigure(
+                    value=value,
+                    unit=fd.get("unit", "USD"),
+                    name=fd.get("name", ""),
+                    source_loc=SourceLocation(
+                        doc_id=doc_id,
+                        page=page,
+                        table_or_figure=section,
+                        row_col_or_line=fd.get("name", ""),
+                    ),
+                    confidence=fd.get("confidence", "high"),
+                ))
+            except (ValueError, TypeError):
+                continue
+
+        return figures
+    except Exception:
+        # Fall back to regex extraction
+        return []
+
 
 def extract_figures_from_text(text: str, doc_id: str) -> list[ExtractedFigure]:
     """Extract numerical figures from text with source locations."""
@@ -59,13 +131,13 @@ def extract_figures_from_text(text: str, doc_id: str) -> list[ExtractedFigure]:
     page = 1
     # Known section headers to filter out
     section_headers = {
-        'income statement', 'balance sheet', 'cash flow statement', 
+        'income statement', 'balance sheet', 'cash flow statement',
         'notes to financial statements', 'document', 'general',
         'consolidated statements of income', 'consolidated balance sheets',
         'consolidated statements of cash flows', 'consolidated statements of operations',
         'statement of income', 'statement of financial position', 'statement of cash flows',
     }
-    
+
     for match in pattern.finditer(text):
         label = match.group(1).strip()
         # Filter out section headers (all caps, or known headers)
@@ -76,7 +148,7 @@ def extract_figures_from_text(text: str, doc_id: str) -> list[ExtractedFigure]:
         # Filter out labels that are too short or look like headers
         if len(label) < 3:
             continue
-            
+
         value_str = match.group(2).replace(",", "")
         unit_hint = match.group(3) or "USD"
 
@@ -84,7 +156,7 @@ def extract_figures_from_text(text: str, doc_id: str) -> list[ExtractedFigure]:
             value = float(value_str)
         except ValueError:
             continue
-            
+
         if unit_hint and unit_hint.lower() in ("million", "m"):
             value *= 1_000_000
         elif unit_hint and unit_hint.lower() in ("billion", "b"):
@@ -118,11 +190,17 @@ def figure_extraction(state: FinancialAgentState) -> dict:
         if not doc:
             continue
         for chunk in doc.chunks:
-            figures = extract_figures_from_text(chunk.content, doc_id)
-            for f in figures:
-                f.source_loc.page = chunk.page
-                f.source_loc.table_or_figure = chunk.section
-            all_figures.extend(figures)
+            # Try LLM extraction first
+            llm_figures = extract_figures_with_llm(chunk.content, doc_id, chunk.page, chunk.section)
+            if llm_figures:
+                all_figures.extend(llm_figures)
+            else:
+                # Fallback to regex
+                figures = extract_figures_from_text(chunk.content, doc_id)
+                for f in figures:
+                    f.source_loc.page = chunk.page
+                    f.source_loc.table_or_figure = chunk.section
+                all_figures.extend(figures)
 
     return {"extracted_figures": all_figures}
 
