@@ -11,17 +11,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisc
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.agent import (
-    citation_indexing,
-    computation,
-    anomaly_detection,
-    figure_extraction,
-    guardrail_post_check,
-    guardrail_pre_check,
-    response_assembly,
-    should_offer_trade,
-    trade_tool,
-)
+from backend.agent import financial_agent_graph, trade_tool
 from backend.config import settings
 from backend.database import init_db
 from backend.document_ingest import get_document, ingest_document, list_documents
@@ -116,51 +106,14 @@ async def query_analysis(request: AnalysisRequest):
         document_ids=request.document_ids,
     )
 
-    # Run pipeline
-    state_dict = state.model_dump()
-
-    updates = guardrail_pre_check(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = figure_extraction(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = citation_indexing(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = computation(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = anomaly_detection(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = response_assembly(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    updates = guardrail_post_check(state)
-    state_dict.update(updates)
-    state = FinancialAgentState(**state_dict)
-
-    # Check for trade request
-    trade = None
-    if should_offer_trade(state) == "offer_trade":
-        trade_updates = trade_tool(state)
-        state_dict.update(trade_updates)
-        state = FinancialAgentState(**state_dict)
-        trade = state.trade_draft
+    result = FinancialAgentState(**financial_agent_graph.invoke(state))
 
     return AnalysisResponse(
-        response=state.final_response,
-        citations=state.citation_index,
-        anomalies=state.anomalies,
-        computations=state.computations,
-        trade_draft=trade,
+        response=result.final_response,
+        citations=result.citation_index,
+        anomalies=result.anomalies,
+        computations=result.computations,
+        trade_draft=result.trade_draft,
     )
 
 
@@ -180,23 +133,21 @@ async def stream_analysis(websocket: WebSocket):
             document_ids=request.get("document_ids", []),
         )
 
-        # Stream pipeline stages
-        stages = [
-            ("guardrail_pre_check", guardrail_pre_check),
-            ("figure_extraction", figure_extraction),
-            ("citation_indexing", citation_indexing),
-            ("computation", computation),
-            ("anomaly_detection", anomaly_detection),
-            ("response_assembly", response_assembly),
-            ("guardrail_post_check", guardrail_post_check),
-        ]
+        # Run the same graph the REST path uses. "updates" names the node that
+        # just ran, "values" carries the accumulated state; the last one is final.
+        final: dict = {}
+        async for mode, data in financial_agent_graph.astream(
+            state, stream_mode=["updates", "values"]
+        ):
+            if mode == "updates":
+                for node_name in data:
+                    await websocket.send_json(
+                        {"type": "token", "content": f"[{node_name}]..."}
+                    )
+            else:
+                final = data
 
-        state_dict = state.model_dump()
-        for stage_name, stage_fn in stages:
-            await websocket.send_json({"type": "token", "content": f"[{stage_name}]..."})
-            updates = stage_fn(state)
-            state_dict.update(updates)
-            state = FinancialAgentState(**state_dict)
+        state = FinancialAgentState(**final)
 
         # Send final response
         await websocket.send_json({"type": "token", "content": state.final_response})
@@ -212,6 +163,11 @@ async def stream_analysis(websocket: WebSocket):
             "type": "computation",
             "metadata": {"computations": [c.model_dump() for c in state.computations]},
         })
+        if state.trade_draft is not None:
+            await websocket.send_json({
+                "type": "trade_draft",
+                "metadata": {"trade_draft": state.trade_draft.model_dump()},
+            })
         await websocket.send_json({"type": "done"})
 
     except WebSocketDisconnect:

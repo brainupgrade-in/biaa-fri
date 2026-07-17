@@ -1,12 +1,13 @@
 // WebSocket service for real-time analysis streaming
-import type { AnalysisResponse, Citation, Anomaly, ComputationResult } from '../types/financial-agent';
+import type { AnalysisResponse, Citation, Anomaly, ComputationResult, TradeDraft } from '../types/financial-agent';
 
-export type WebSocketMessageType = 
-  | 'token' 
-  | 'citations' 
-  | 'anomalies' 
-  | 'computation' 
-  | 'done' 
+export type WebSocketMessageType =
+  | 'token'
+  | 'citations'
+  | 'anomalies'
+  | 'computation'
+  | 'trade_draft'
+  | 'done'
   | 'error';
 
 export interface WebSocketMessage {
@@ -16,6 +17,7 @@ export interface WebSocketMessage {
     citations?: Citation[];
     anomalies?: Anomaly[];
     computation?: ComputationResult;
+    trade_draft?: TradeDraft;
   };
 }
 

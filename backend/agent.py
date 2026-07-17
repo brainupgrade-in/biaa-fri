@@ -7,6 +7,8 @@ import math
 import re
 from datetime import datetime
 
+from langgraph.graph import END, StateGraph
+
 from backend.config import settings
 from backend.computation import compute_z_score, execute_computation
 from backend.guardrail import post_check_guardrail, pre_check_guardrail
@@ -468,3 +470,50 @@ def handle_trade_confirmation(state: FinancialAgentState) -> str:
     if state.trade_confirmed:
         return "confirm"
     return "end"
+
+
+# ---------------------------------------------------------------------------
+# Graph
+# ---------------------------------------------------------------------------
+
+# Nodes in the order the graph runs them. Every node takes the state and
+# returns a partial dict, which is what StateGraph merges back in.
+PIPELINE_NODES: list[tuple[str, object]] = [
+    ("guardrail_pre_check", guardrail_pre_check),
+    ("figure_extraction", figure_extraction),
+    ("citation_indexing", citation_indexing),
+    ("computation", computation),
+    ("anomaly_detection", anomaly_detection),
+    ("response_assembly", response_assembly),
+    ("guardrail_post_check", guardrail_post_check),
+]
+
+
+def build_financial_agent_graph():
+    """Wire the analysis pipeline into a LangGraph StateGraph.
+
+    Nodes run as a linear spine, then guardrail_post_check routes on
+    should_offer_trade: a /trade query runs trade_tool, anything else ends.
+    """
+    graph = StateGraph(FinancialAgentState)
+
+    for name, node in PIPELINE_NODES:
+        graph.add_node(name, node)
+    graph.add_node("trade_tool", trade_tool)
+
+    graph.set_entry_point(PIPELINE_NODES[0][0])
+    for (src, _), (dst, _) in zip(PIPELINE_NODES, PIPELINE_NODES[1:]):
+        graph.add_edge(src, dst)
+
+    graph.add_conditional_edges(
+        "guardrail_post_check",
+        should_offer_trade,
+        {"offer_trade": "trade_tool", "end": END},
+    )
+    graph.add_edge("trade_tool", END)
+
+    return graph.compile()
+
+
+# Compiled once; the graph is stateless, so it is safe to share across requests.
+financial_agent_graph = build_financial_agent_graph()
