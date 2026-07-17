@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # LLM
     llm_api_key: str = ""
-    llm_model: str = "llama-3.1-8b-instant"  # Groq model
+    llm_model: str = "qwen/qwen3.6-27b"  # Groq model
     llm_temperature: float = 0.0
 
     # Groq API key (loaded from .env)
