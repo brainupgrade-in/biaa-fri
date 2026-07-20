@@ -203,3 +203,8 @@ docs/_build/
 *.key
 *.cert
 secrets/
+
+# Local app state (default DATABASE_URL / CHECKPOINT_DB_PATH write here)
+data/
+*.db
+*.sqlite3

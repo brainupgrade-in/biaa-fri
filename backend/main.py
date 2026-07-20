@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.agent import financial_agent_graph, trade_tool
+from backend.agent import get_graph, trade_tool
 from backend.config import settings
 from backend.database import init_db
 from backend.document_ingest import get_document, ingest_document, list_documents
@@ -99,6 +100,12 @@ async def get_document_detail(doc_id: str):
 # Analysis
 # ---------------------------------------------------------------------------
 
+def _thread_config(thread_id: str | None) -> dict:
+    """Config for a graph run. A checkpointer requires a thread_id, so callers
+    that don't supply one get a throwaway thread rather than an error."""
+    return {"configurable": {"thread_id": thread_id or str(uuid.uuid4())}}
+
+
 @app.post("/api/analysis/query", response_model=AnalysisResponse)
 async def query_analysis(request: AnalysisRequest):
     state = FinancialAgentState(
@@ -106,7 +113,9 @@ async def query_analysis(request: AnalysisRequest):
         document_ids=request.document_ids,
     )
 
-    result = FinancialAgentState(**financial_agent_graph.invoke(state))
+    result = FinancialAgentState(
+        **get_graph().invoke(state, _thread_config(request.thread_id))
+    )
 
     return AnalysisResponse(
         response=result.final_response,
@@ -136,8 +145,10 @@ async def stream_analysis(websocket: WebSocket):
         # Run the same graph the REST path uses. "updates" names the node that
         # just ran, "values" carries the accumulated state; the last one is final.
         final: dict = {}
-        async for mode, data in financial_agent_graph.astream(
-            state, stream_mode=["updates", "values"]
+        async for mode, data in get_graph().astream(
+            state,
+            _thread_config(request.get("thread_id")),
+            stream_mode=["updates", "values"],
         ):
             if mode == "updates":
                 for node_name in data:

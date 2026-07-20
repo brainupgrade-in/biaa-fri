@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # container; point at Postgres by setting DATABASE_URL.
     database_url: str = "sqlite:///./data/app.db"
 
+    # Graph checkpoints. Kept in their own SQLite file rather than following
+    # DATABASE_URL, so threads resume the same way whichever database is used.
+    checkpoint_db_path: str = "./data/checkpoints.db"
+
     # Vector store
     chroma_host: str = "localhost"
     chroma_port: int = 8000

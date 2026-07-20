@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
+import sqlite3
 from datetime import datetime
 
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
 from backend.config import settings
@@ -476,9 +479,20 @@ def handle_trade_confirmation(state: FinancialAgentState) -> str:
 # Graph
 # ---------------------------------------------------------------------------
 
+def begin_run(state: FinancialAgentState) -> dict:
+    """Clear state that belongs to a single request, not to the thread.
+
+    A checkpointed thread carries every channel forward, and only trade_tool
+    ever writes trade_draft. Without this reset a plain query on a thread that
+    once ran /trade would report the earlier draft as if it were its own.
+    """
+    return {"trade_draft": None}
+
+
 # Nodes in the order the graph runs them. Every node takes the state and
 # returns a partial dict, which is what StateGraph merges back in.
 PIPELINE_NODES: list[tuple[str, object]] = [
+    ("begin_run", begin_run),
     ("guardrail_pre_check", guardrail_pre_check),
     ("figure_extraction", figure_extraction),
     ("citation_indexing", citation_indexing),
@@ -489,11 +503,12 @@ PIPELINE_NODES: list[tuple[str, object]] = [
 ]
 
 
-def build_financial_agent_graph():
+def build_financial_agent_graph(checkpointer=None):
     """Wire the analysis pipeline into a LangGraph StateGraph.
 
     Nodes run as a linear spine, then guardrail_post_check routes on
     should_offer_trade: a /trade query runs trade_tool, anything else ends.
+    With a checkpointer, runs sharing a thread_id resume from stored state.
     """
     graph = StateGraph(FinancialAgentState)
 
@@ -512,8 +527,28 @@ def build_financial_agent_graph():
     )
     graph.add_edge("trade_tool", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
-# Compiled once; the graph is stateless, so it is safe to share across requests.
-financial_agent_graph = build_financial_agent_graph()
+def _make_checkpointer() -> SqliteSaver:
+    path = settings.checkpoint_db_path
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    # check_same_thread=False: FastAPI runs sync handlers on a threadpool.
+    return SqliteSaver(sqlite3.connect(path, check_same_thread=False))
+
+
+_graph = None
+
+
+def get_graph():
+    """Return the compiled graph, building it on first use.
+
+    Deferred rather than built at import so that importing this module does not
+    open a SQLite connection or create the checkpoint file as a side effect.
+    """
+    global _graph
+    if _graph is None:
+        _graph = build_financial_agent_graph(_make_checkpointer())
+    return _graph

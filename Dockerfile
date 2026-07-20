@@ -37,6 +37,7 @@ COPY --from=pydeps /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH \
     STATIC_DIR=/app/frontend/build \
     DATABASE_URL=sqlite:////data/app.db \
+    CHECKPOINT_DB_PATH=/data/checkpoints.db \
     CHROMA_PERSIST_DIR=/data/chroma_db \
     CHROMA_EMBEDDED=true \
     ANONYMIZED_TELEMETRY=False
