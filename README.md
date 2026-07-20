@@ -78,10 +78,10 @@ Two nodes from design doc §3.2 are deliberately absent — `document_ingest` an
 | `response_assembly` | in the graph |
 | `guardrail_post_check` | in the graph |
 | `trade_tool` | in the graph, reached by a conditional edge |
-| `trade_confirmation` | **not a node** — confirmation is a separate request, so it needs a checkpointer to resume; see gaps |
+| `trade_confirmation` | **not a node yet** — confirmation is a separate request; the checkpointer now makes a resume node possible, see gaps |
 
 `should_offer_trade` is the conditional-edge router. `handle_trade_confirmation` exists but is
-unused, pending the checkpointer.
+unused, pending the interrupt/resume wiring described under gaps.
 
 #### How it is wired
 
@@ -114,15 +114,15 @@ merge-based graph fits:
 Both transports run the same compiled graph. REST invokes it:
 
 ```python
-result = FinancialAgentState(**financial_agent_graph.invoke(state))
+result = FinancialAgentState(**get_graph().invoke(state, _thread_config(request.thread_id)))
 ```
 
 The WebSocket streams it, using `"updates"` to name the node that just ran and `"values"` to carry
 the accumulated state, so progress events and the final state come from one traversal:
 
 ```python
-async for mode, data in financial_agent_graph.astream(
-    state, stream_mode=["updates", "values"]
+async for mode, data in get_graph().astream(
+    state, _thread_config(thread_id), stream_mode=["updates", "values"]
 ):
     if mode == "updates":
         for node_name in data:
@@ -135,14 +135,27 @@ Because both paths share the graph, `/trade` now behaves identically over REST a
 previously worked only over REST, since each path hand-rolled its own sequence and only one of
 them checked `should_offer_trade`.
 
+#### Checkpointing and threads
+
+The graph compiles with a `SqliteSaver` (`CHECKPOINT_DB_PATH`, default `/data/checkpoints.db`),
+so runs sharing a `thread_id` resume from stored state and survive a restart. A request without a
+`thread_id` gets a throwaway one, since a checkpointer requires a thread to key on.
+
+The first node, `begin_run`, clears `trade_draft` at the start of every run. Without it a plain
+query on a thread that once ran `/trade` would report the earlier draft as its own, because a
+checkpointed thread carries every channel forward and only `trade_tool` writes that key. (A node
+clearing a channel with `None` works; passing `None` in the input does not — LangGraph skips it.)
+
+Checkpoints stay in their own SQLite file rather than following `DATABASE_URL`. If you point the
+app at Postgres, documents go there while checkpoints remain in the local file — fine for a
+single container, worth revisiting for a multi-replica deployment.
+
 #### What the graph does not do yet
 
-- **No checkpointing / resumable threads.** `AnalysisRequest` accepts a `thread_id`, but no
-  checkpointer is configured, so nothing is persisted between requests and each one replays from
-  scratch.
-- **No human-in-the-loop trade confirmation.** `POST /api/trade/confirm/{id}` still returns a
-  canned response instead of resuming the graph at a `trade_confirmation` node. That needs the
-  checkpointer above, since confirmation arrives as a separate request.
+- **No human-in-the-loop trade confirmation.** `POST /api/trade/confirm/{id}` returns a canned
+  response rather than resuming the graph at a `trade_confirmation` node. The checkpointer makes
+  this possible now; wiring `handle_trade_confirmation` as an interrupt/resume step is the
+  remaining work.
 
 ### LangChain — one lazy import, for optional LLM extraction
 
@@ -197,6 +210,7 @@ upload is fast and the container needs no network egress at runtime.
 | Env var | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:////data/app.db` | Point at `postgresql://…` to use Postgres instead. |
+| `CHECKPOINT_DB_PATH` | `/data/checkpoints.db` | SQLite file for LangGraph thread checkpoints. |
 | `LLM_API_KEY` | *(empty)* | Enables LLM figure extraction. Unset = regex extractor only. |
 | `GROQ_API_KEY` | *(empty)* | Groq credential used by `ChatOpenAI`. |
 | `LLM_MODEL` | `llama-3.1-8b-instant` | Groq model id. |
@@ -248,11 +262,9 @@ persistence on SQLite or Postgres.
 
 Known gaps:
 
-- **No checkpointing.** `AnalysisRequest.thread_id` is accepted but inert — no checkpointer is
-  configured, so nothing resumes across requests.
 - **Trade confirmation isn't a graph node.** `POST /api/trade/confirm/{id}` returns a canned
-  response; making it a real interrupt/resume step needs the checkpointer above.
-  `handle_trade_confirmation` is written but unused until then.
+  response rather than resuming the graph at a `trade_confirmation` node. The checkpointer is now
+  in place, so this is wiring `handle_trade_confirmation` as an interrupt/resume step.
 - **Part of the persistence layer is unused.** `backend/database.py` defines repository functions
   for figures, guardrail events and trade drafts that nothing calls yet. Only documents and
   chunks are actually persisted; guardrail logs (`main._audit_log`) and trade drafts still live
